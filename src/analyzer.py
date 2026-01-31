@@ -24,13 +24,14 @@ from tenacity import (
     before_sleep_log,
 )
 
-from config import get_config
+from src.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
 # 股票名称映射（常见股票）
 STOCK_NAME_MAP = {
+    # === A股 ===
     '600519': '贵州茅台',
     '000001': '平安银行',
     '300750': '宁德时代',
@@ -46,7 +47,104 @@ STOCK_NAME_MAP = {
     '600900': '长江电力',
     '601166': '兴业银行',
     '600028': '中国石化',
+
+    # === 美股 ===
+    'AAPL': '苹果',
+    'TSLA': '特斯拉',
+    'MSFT': '微软',
+    'GOOGL': '谷歌A',
+    'GOOG': '谷歌C',
+    'AMZN': '亚马逊',
+    'NVDA': '英伟达',
+    'META': 'Meta',
+    'AMD': 'AMD',
+    'INTC': '英特尔',
+    'BABA': '阿里巴巴',
+    'PDD': '拼多多',
+    'JD': '京东',
+    'BIDU': '百度',
+    'NIO': '蔚来',
+    'XPEV': '小鹏汽车',
+    'LI': '理想汽车',
+    'COIN': 'Coinbase',
+    'MSTR': 'MicroStrategy',
+
+    # === 港股 (5位数字) ===
+    '00700': '腾讯控股',
+    '03690': '美团',
+    '01810': '小米集团',
+    '09988': '阿里巴巴',
+    '09618': '京东集团',
+    '09888': '百度集团',
+    '01024': '快手',
+    '00981': '中芯国际',
+    '02015': '理想汽车',
+    '09868': '小鹏汽车',
+    '00005': '汇丰控股',
+    '01299': '友邦保险',
+    '00941': '中国移动',
+    '00883': '中国海洋石油',
 }
+
+
+def get_stock_name_multi_source(
+    stock_code: str, 
+    context: Optional[Dict] = None,
+    data_manager = None
+) -> str:
+    """
+    多来源获取股票中文名称
+    
+    获取策略（按优先级）：
+    1. 从传入的 context 中获取（realtime 数据）
+    2. 从静态映射表 STOCK_NAME_MAP 获取
+    3. 从 DataFetcherManager 获取（各数据源）
+    4. 返回默认名称（股票+代码）
+    
+    Args:
+        stock_code: 股票代码
+        context: 分析上下文（可选）
+        data_manager: DataFetcherManager 实例（可选）
+        
+    Returns:
+        股票中文名称
+    """
+    # 1. 从上下文获取（实时行情数据）
+    if context:
+        # 优先从 stock_name 字段获取
+        if context.get('stock_name'):
+            name = context['stock_name']
+            if name and not name.startswith('股票'):
+                return name
+        
+        # 其次从 realtime 数据获取
+        if 'realtime' in context and context['realtime'].get('name'):
+            return context['realtime']['name']
+    
+    # 2. 从静态映射表获取
+    if stock_code in STOCK_NAME_MAP:
+        return STOCK_NAME_MAP[stock_code]
+    
+    # 3. 从数据源获取
+    if data_manager is None:
+        try:
+            from data_provider.base import DataFetcherManager
+            data_manager = DataFetcherManager()
+        except Exception as e:
+            logger.debug(f"无法初始化 DataFetcherManager: {e}")
+    
+    if data_manager:
+        try:
+            name = data_manager.get_stock_name(stock_code)
+            if name:
+                # 更新缓存
+                STOCK_NAME_MAP[stock_code] = name
+                return name
+        except Exception as e:
+            logger.debug(f"从数据源获取股票名称失败: {e}")
+    
+    # 4. 返回默认名称
+    return f'股票{stock_code}'
 
 
 @dataclass
@@ -248,11 +346,12 @@ class GeminiAnalyzer:
 
 ```json
 {
+    "stock_name": "股票中文名称",
     "sentiment_score": 0-100整数,
     "trend_prediction": "强烈看多/看多/震荡/看空/强烈看空",
     "operation_advice": "买入/加仓/持有/减仓/卖出/观望",
     "confidence_level": "高/中/低",
-    
+
     "dashboard": {
         "core_conclusion": {
             "one_sentence": "一句话核心结论（30字以内，直接告诉用户做什么）",
@@ -263,7 +362,7 @@ class GeminiAnalyzer:
                 "has_position": "持仓者建议：具体操作指引"
             }
         },
-        
+
         "data_perspective": {
             "trend_status": {
                 "ma_alignment": "均线排列状态描述",
@@ -293,7 +392,7 @@ class GeminiAnalyzer:
                 "chip_health": "健康/一般/警惕"
             }
         },
-        
+
         "intelligence": {
             "latest_news": "【最新消息】近期重要新闻摘要",
             "risk_alerts": ["风险点1：具体描述", "风险点2：具体描述"],
@@ -301,7 +400,7 @@ class GeminiAnalyzer:
             "earnings_outlook": "业绩预期分析（基于年报预告、业绩快报等）",
             "sentiment_summary": "舆情情绪一句话总结"
         },
-        
+
         "battle_plan": {
             "sniper_points": {
                 "ideal_buy": "理想买入点：XX元（在MA5附近）",
@@ -323,12 +422,12 @@ class GeminiAnalyzer:
             ]
         }
     },
-    
+
     "analysis_summary": "100字综合分析摘要",
     "key_points": "3-5个核心看点，逗号分隔",
     "risk_warning": "风险提示",
     "buy_reason": "操作理由，引用交易理念",
-    
+
     "trend_analysis": "走势形态分析",
     "short_term_outlook": "短期1-3日展望",
     "medium_term_outlook": "中期1-2周展望",
@@ -342,7 +441,7 @@ class GeminiAnalyzer:
     "news_summary": "新闻摘要",
     "market_sentiment": "市场情绪",
     "hot_topics": "相关热点",
-    
+
     "search_performed": true/false,
     "data_sources": "数据来源说明"
 }
@@ -569,13 +668,14 @@ class GeminiAnalyzer:
                     logger.info(f"[OpenAI] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
                     time.sleep(delay)
                 
+                config = get_config()
                 response = self._openai_client.chat.completions.create(
                     model=self._current_model_name,
                     messages=[
                         {"role": "system", "content": self.SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=generation_config.get('temperature', 0.7),
+                    temperature=generation_config.get('temperature', config.openai_temperature),
                     max_tokens=generation_config.get('max_output_tokens', 8192),
                 )
                 
@@ -765,27 +865,30 @@ class GeminiAnalyzer:
             prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
             logger.info(f"[LLM Prompt 预览]\n{prompt_preview}")
             logger.debug(f"=== 完整 Prompt ({len(prompt)}字符) ===\n{prompt}\n=== End Prompt ===")
-            
-            # 设置生成配置
+
+            # 设置生成配置（从配置文件读取温度参数）
+            config = get_config()
             generation_config = {
-                "temperature": 0.7,
+                "temperature": config.gemini_temperature,
                 "max_output_tokens": 8192,
             }
-            
-            logger.info(f"[LLM调用] 开始调用 Gemini API (temperature={generation_config['temperature']}, max_tokens={generation_config['max_output_tokens']})...")
+
+            # 根据实际使用的 API 显示日志
+            api_provider = "OpenAI" if self._use_openai else "Gemini"
+            logger.info(f"[LLM调用] 开始调用 {api_provider} API...")
             
             # 使用带重试的 API 调用
             start_time = time.time()
             response_text = self._call_api_with_retry(prompt, generation_config)
             elapsed = time.time() - start_time
-            
+
             # 记录响应信息
-            logger.info(f"[LLM返回] Gemini API 响应成功, 耗时 {elapsed:.2f}s, 响应长度 {len(response_text)} 字符")
+            logger.info(f"[LLM返回] {api_provider} API 响应成功, 耗时 {elapsed:.2f}s, 响应长度 {len(response_text)} 字符")
             
             # 记录响应预览（INFO级别）和完整响应（DEBUG级别）
             response_preview = response_text[:300] + "..." if len(response_text) > 300 else response_text
             logger.info(f"[LLM返回 预览]\n{response_preview}")
-            logger.debug(f"=== Gemini 完整响应 ({len(response_text)}字符) ===\n{response_text}\n=== End Response ===")
+            logger.debug(f"=== {api_provider} 完整响应 ({len(response_text)}字符) ===\n{response_text}\n=== End Response ===")
             
             # 解析响应
             result = self._parse_response(response_text, code, name)
@@ -957,6 +1060,15 @@ class GeminiAnalyzer:
             prompt += """
 未搜索到该股票近期的相关新闻。请主要依据技术面数据进行分析。
 """
+
+        # 注入缺失数据警告
+        if context.get('data_missing'):
+            prompt += """
+⚠️ **数据缺失警告**
+由于接口限制，当前无法获取完整的实时行情和技术指标数据。
+请 **忽略上述表格中的 N/A 数据**，重点依据 **【📰 舆情情报】** 中的新闻进行基本面和情绪面分析。
+在回答技术面问题（如均线、乖离率）时，请直接说明“数据缺失，无法判断”，**严禁编造数据**。
+"""
         
         # 明确的输出要求
         prompt += f"""
@@ -966,6 +1078,9 @@ class GeminiAnalyzer:
 
 请为 **{stock_name}({code})** 生成【决策仪表盘】，严格按照 JSON 格式输出。
 
+### ⚠️ 重要：股票名称确认
+如果上方显示的股票名称为"股票{code}"或不正确，请在分析开头**明确输出该股票的正确中文全称**。
+
 ### 重点关注（必须明确回答）：
 1. ❓ 是否满足 MA5>MA10>MA20 多头排列？
 2. ❓ 当前乖离率是否在安全范围内（<5%）？—— 超过5%必须标注"严禁追高"
@@ -974,6 +1089,7 @@ class GeminiAnalyzer:
 5. ❓ 消息面有无重大利空？（减持、处罚、业绩变脸等）
 
 ### 决策仪表盘要求：
+- **股票名称**：必须输出正确的中文全称（如"贵州茅台"而非"股票600519"）
 - **核心结论**：一句话说清该买/该卖/该等
 - **持仓分类建议**：空仓者怎么做 vs 持仓者怎么做
 - **具体狙击点位**：买入价、止损价、目标价（精确到分）
@@ -1039,7 +1155,12 @@ class GeminiAnalyzer:
                 
                 # 提取 dashboard 数据
                 dashboard = data.get('dashboard', None)
-                
+
+                # 优先使用 AI 返回的股票名称（如果原名称无效或包含代码）
+                ai_stock_name = data.get('stock_name')
+                if ai_stock_name and (name.startswith('股票') or name == code or 'Unknown' in name):
+                    name = ai_stock_name
+
                 # 解析所有字段，使用默认值防止缺失
                 return AnalysisResult(
                     code=code,

@@ -1,4 +1,6 @@
-# 📈 A股智能分析系统
+<div align="center">
+
+# 📈 股票智能分析系统
 
 [![GitHub stars](https://img.shields.io/github/stars/ZhuLinsen/daily_stock_analysis?style=social)](https://github.com/ZhuLinsen/daily_stock_analysis/stargazers)
 [![CI](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml)
@@ -6,9 +8,22 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-> 🤖 基于 AI 大模型的 A/H 股自选股智能分析系统，每日自动分析并推送「决策仪表盘」到企业微信/飞书/Telegram/邮箱
+> 🤖 基于 AI 大模型的 A股/港股/美股自选股智能分析系统，每日自动分析并推送「决策仪表盘」到企业微信/飞书/Telegram/邮箱
 
-![运行效果演示](./sources/all_2026-01-13_221547.gif)
+[**功能特性**](#-功能特性) • [**部署指南**](docs/DEPLOY.md) • [**推送效果**](#-推送效果) • [**使用指南**](docs/full-guide.md) • [**更新日志**](docs/CHANGELOG.md)
+
+[English](docs/README_EN.md) | 简体中文 | [繁體中文](docs/README_CHT.md)
+
+</div>
+
+## 💖 赞助商 (Sponsors)
+<div align="center">
+  <a href="https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis" target="_blank">
+    <img src="./sources/serpapi_banner_zh.png" alt="轻松抓取搜索引擎上的实时金融新闻数据 - SerpApi" height="160">
+  </a>
+</div>
+<br>
+
 
 ## ✨ 功能特性
 
@@ -22,7 +37,7 @@
 - **🔄 多模型支持** - 支持 OpenAI 兼容 API（DeepSeek、通义千问等）作为备选
 
 ### 📊 数据来源
-- **行情数据**: AkShare（免费）、Tushare、Baostock、YFinance
+- **行情数据**: AkShare（免费）、Tushare、Pytdx（通达信）、Baostock、YFinance
 - **新闻搜索**: Tavily、SerpAPI、Bocha
 - **AI 分析**: 
   - 主力：Google Gemini（gemini-3-flash-preview）—— [免费获取](https://aistudio.google.com/)
@@ -70,9 +85,12 @@
 | `EMAIL_SENDER` | 发件人邮箱（如 `xxx@qq.com`） | 可选 |
 | `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
 | `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔，留空则发给自己） | 可选 |
+| `PUSHPLUS_TOKEN` | PushPlus Token（[获取地址](https://www.pushplus.plus)，国内推送服务） | 可选 |
 | `CUSTOM_WEBHOOK_URLS` | 自定义 Webhook（支持钉钉等，多个用逗号分隔） | 可选 |
 | `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定义 Webhook 的 Bearer Token（用于需要认证的 Webhook） | 可选 |
 | `SINGLE_STOCK_NOTIFY` | 单股推送模式：设为 `true` 则每分析完一只股票立即推送 | 可选 |
+| `REPORT_TYPE` | 报告类型：`simple`(精简) 或 `full`(完整)，Docker环境推荐设为 `full` | 可选 |
+| `ANALYSIS_DELAY` | 个股分析和大盘分析之间的延迟（秒），避免API限流，如 `10` | 可选 |
 
 > *注：至少配置一个渠道，配置多个则同时推送
 >
@@ -82,11 +100,12 @@
 
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
-| `STOCK_LIST` | 自选股代码，如 `600519,300750,002594` | ✅ |
+| `STOCK_LIST` | 自选股代码，如 `600519,hk00700,AAPL,TSLA` | ✅ |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) 搜索 API（新闻搜索） | 推荐 |
 | `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索优化，支持AI摘要，多个key用逗号分隔） | 可选 |
-| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/) 备用搜索 | 可选 |
+| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis) 备用搜索 | 可选 |
 | `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/) Token | 可选 |
+| `WECHAT_MSG_TYPE` | 企微消息类型，默认 markdown，支持配置 text 类型，发送纯 markdown 文本 | 可选 |
 
 #### 3. 启用 Actions
 
@@ -105,6 +124,8 @@
 > 📖 本地运行、Docker 部署详细步骤请参考 [完整配置指南](docs/full-guide.md)
 
 ## 📱 推送效果
+
+![运行效果演示](./sources/all_2026-01-13_221547.gif)
 
 ### 决策仪表盘
 ```
@@ -150,32 +171,56 @@
 
 ## 🖥️ 本地 WebUI（可选）
 
-本地运行时，可启用简易 WebUI 来方便查看/修改 `.env` 里的自选股列表。
+本地运行时，可启用 WebUI 来管理配置和触发分析。
 
-- 启动命令：`python main.py --webui`
+### 启动方式
+
+| 命令 | 说明 |
+|------|------|
+| `python main.py --webui` | 启动 WebUI + 执行一次完整分析 |
+| `python main.py --webui-only` | 仅启动 WebUI，手动触发分析 |
+
 - 访问地址：`http://127.0.0.1:8000`
 - 详细说明请参考 [配置指南 - WebUI](docs/full-guide.md#本地-webui-管理界面)
+
+### 功能特性
+
+- 📝 **配置管理** - 查看/修改 `.env` 里的自选股列表
+- 🚀 **快速分析** - 页面输入股票代码，一键触发分析
+- 📊 **实时进度** - 分析任务状态实时更新，支持多任务并行
+
+### API 接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/` | GET | 配置管理页面 |
+| `/health` | GET | 健康检查 |
+| `/analysis?code=xxx` | GET | 触发单只股票异步分析 |
+| `/tasks` | GET | 查询所有任务状态 |
+| `/task?id=xxx` | GET | 查询单个任务状态 |
 
 ## 📁 项目结构
 
 ```
 daily_stock_analysis/
 ├── main.py              # 主程序入口
-├── analyzer.py          # AI 分析器（Gemini）
-├── market_analyzer.py   # 大盘复盘分析
-├── search_service.py    # 新闻搜索服务
-├── notification.py      # 消息推送
-├── scheduler.py         # 定时任务
-├── storage.py           # 数据存储
-├── config.py            # 配置管理
+├── webui.py             # WebUI 入口
+├── src/                 # 核心业务代码
+│   ├── analyzer.py      # AI 分析器（Gemini）
+│   ├── config.py        # 配置管理
+│   ├── notification.py  # 消息推送
+│   ├── storage.py       # 数据存储
+│   └── ...
+├── bot/                 # 机器人模块
+├── web/                 # WebUI 模块
 ├── data_provider/       # 数据源适配器
-│   ├── akshare_fetcher.py
-│   ├── tushare_fetcher.py
-│   ├── baostock_fetcher.py
-│   └── yfinance_fetcher.py
-├── .github/workflows/   # GitHub Actions
-├── Dockerfile           # Docker 镜像
-└── docker-compose.yml   # Docker 编排
+├── docker/              # Docker 配置
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── docs/                # 项目文档
+│   ├── full-guide.md    # 完整配置指南
+│   └── ...
+└── .github/workflows/   # GitHub Actions
 ```
 
 ## 🗺️ Roadmap
@@ -189,7 +234,7 @@ daily_stock_analysis/
 - [x] 邮件通知（SMTP）
 - [x] 自定义 Webhook（支持钉钉、Discord、Slack、Bark 等）
 - [x] iOS/Android 推送（Pushover）
-
+- [x] 钉钉机器人 （已支持命令交互 >> [相关配置](docs/bot/dingding-bot-config.md)）
 ### 🤖 AI 模型支持
 - [x] Google Gemini（主力，免费额度）
 - [x] OpenAI 兼容 API（支持 GPT-4/DeepSeek/通义千问/Claude/文心一言 等）
@@ -198,6 +243,7 @@ daily_stock_analysis/
 ### 📊 数据源扩展
 - [x] AkShare（免费）
 - [x] Tushare Pro
+- [x] Pytdx（通达信）
 - [x] Baostock
 - [x] YFinance
 
@@ -208,14 +254,23 @@ daily_stock_analysis/
 - [x] GitHub Actions
 - [x] 港股支持
 - [x] Web 管理界面 (简易版)
+- [x] 美股支持
 - [ ] 历史分析回测
-- [ ] 美股支持
+
+
+## ☕ 支持项目
+如果本项目对你有帮助，欢迎支持项目的持续维护与迭代，感谢支持 🙏  
+赞赏可备注联系方式，祝股市长虹
+
+| 支付宝 (Alipay) | 微信支付 (WeChat) | Ko-fi |
+| :---: | :---: | :---: |
+| <img src="./sources/alipay.jpg" width="200" alt="Alipay"> | <img src="./sources/wechatpay.jpg" width="200" alt="WeChat Pay"> | <a href="https://ko-fi.com/mumu157" target="_blank"><img src="./sources/ko-fi.png" width="200" alt="Ko-fi"></a> |
 
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-详见 [贡献指南](CONTRIBUTING.md)
+详见 [贡献指南](docs/CONTRIBUTING.md)
 
 ## 📄 License
 [MIT License](LICENSE) © 2026 ZhuLinsen
@@ -228,6 +283,7 @@ daily_stock_analysis/
 - GitHub Issues：[提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
 
 ## ⭐ Star History
+**如果觉得有用，请给个 ⭐ Star 支持一下！**
 
 <a href="https://star-history.com/#ZhuLinsen/daily_stock_analysis&Date">
  <picture>
@@ -242,17 +298,3 @@ daily_stock_analysis/
 本项目仅供学习和研究使用，不构成任何投资建议。股市有风险，投资需谨慎。作者不对使用本项目产生的任何损失负责。
 
 ---
-
-**如果觉得有用，请给个 ⭐ Star 支持一下！**
-
-<!-- 赞赏锚点 -->
-<a id="sponsor"></a>
-###### ☕ 请我喝杯咖啡
-- 如果觉得本项目对你有帮助且行有余力，可以请我喝杯咖啡，支持项目的持续维护与迭代；不赞赏也完全不影响使用。   
-<small>（赞赏时可备注联系方式，方便私信致谢与后续交流反馈）</small>
-- 感谢支持, 祝您股市长虹，拿主力当提款机。
-
-<div align="center">
-  <img src="./sources/wechatpay.jpg" alt="WeChat Pay" width="200" style="margin-right: 20px;">
-  <img src="./sources/alipay.jpg" alt="Alipay" width="200">
-</div>
