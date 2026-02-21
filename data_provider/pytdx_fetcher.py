@@ -15,8 +15,8 @@ PytdxFetcher - 通达信数据源 (Priority 2)
 """
 
 import logging
+import re
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Optional, Generator, List, Tuple
 
 import pandas as pd
@@ -29,8 +29,59 @@ from tenacity import (
 )
 
 from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_hosts_from_env() -> Optional[List[Tuple[str, int]]]:
+    """
+    从环境变量构建通达信服务器列表。
+
+    优先级：
+    1. PYTDX_SERVERS：逗号分隔 "ip:port,ip:port"（如 "192.168.1.1:7709,10.0.0.1:7709"）
+    2. PYTDX_HOST + PYTDX_PORT：单个服务器
+    3. 均未配置时返回 None（调用方使用 DEFAULT_HOSTS）
+    """
+    servers = os.getenv("PYTDX_SERVERS", "").strip()
+    if servers:
+        result = []
+        for part in servers.split(","):
+            part = part.strip()
+            if ":" in part:
+                host, port_str = part.rsplit(":", 1)
+                host, port_str = host.strip(), port_str.strip()
+                if host and port_str:
+                    try:
+                        result.append((host, int(port_str)))
+                    except ValueError:
+                        logger.warning(f"Invalid PYTDX_SERVERS entry: {part}")
+            else:
+                logger.warning(f"Invalid PYTDX_SERVERS entry (missing port): {part}")
+        if result:
+            return result
+
+    host = os.getenv("PYTDX_HOST", "").strip()
+    port_str = os.getenv("PYTDX_PORT", "").strip()
+    if host and port_str:
+        try:
+            return [(host, int(port_str))]
+        except ValueError:
+            logger.warning(f"Invalid PYTDX_HOST/PYTDX_PORT: {host}:{port_str}")
+
+    return None
+
+
+def _is_us_code(stock_code: str) -> bool:
+    """
+    判断代码是否为美股
+    
+    美股代码规则：
+    - 1-5个大写字母，如 'AAPL', 'TSLA'
+    - 可能包含 '.'，如 'BRK.B'
+    """
+    code = stock_code.strip().upper()
+    return bool(re.match(r'^[A-Z]{1,5}(\.[A-Z])?$', code))
 
 
 class PytdxFetcher(BaseFetcher):
@@ -53,7 +104,7 @@ class PytdxFetcher(BaseFetcher):
     """
     
     name = "PytdxFetcher"
-    priority = 2
+    priority = int(os.getenv("PYTDX_PRIORITY", "2"))
     
     # 默认通达信行情服务器列表
     DEFAULT_HOSTS = [
@@ -70,11 +121,17 @@ class PytdxFetcher(BaseFetcher):
     def __init__(self, hosts: Optional[List[Tuple[str, int]]] = None):
         """
         初始化 PytdxFetcher
-        
+
         Args:
-            hosts: 服务器列表 [(host, port), ...]，默认使用内置列表
+            hosts: 服务器列表 [(host, port), ...]。若未传入，优先使用环境变量
+                   PYTDX_SERVERS（ip:port,ip:port）或 PYTDX_HOST+PYTDX_PORT，
+                   否则使用内置 DEFAULT_HOSTS。
         """
-        self._hosts = hosts or self.DEFAULT_HOSTS
+        if hosts is not None:
+            self._hosts = hosts
+        else:
+            env_hosts = _parse_hosts_from_env()
+            self._hosts = env_hosts if env_hosts else self.DEFAULT_HOSTS
         self._api = None
         self._connected = False
         self._current_host_idx = 0
@@ -186,10 +243,15 @@ class PytdxFetcher(BaseFetcher):
         使用 get_security_bars() 获取日线数据
         
         流程：
-        1. 使用上下文管理器管理连接
-        2. 判断市场代码
-        3. 调用 API 获取 K 线数据
+        1. 检查是否为美股（不支持）
+        2. 使用上下文管理器管理连接
+        3. 判断市场代码
+        4. 调用 API 获取 K 线数据
         """
+        # 美股不支持，抛出异常让 DataFetcherManager 切换到其他数据源
+        if _is_us_code(stock_code):
+            raise DataFetchError(f"PytdxFetcher 不支持美股 {stock_code}，请使用 AkshareFetcher 或 YfinanceFetcher")
+        
         market, code = self._get_market_code(stock_code)
         
         # 计算需要获取的交易日数量（估算）
