@@ -5,6 +5,8 @@ import BacktestPage from './pages/BacktestPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
+import ChatPage from './pages/ChatPage';
+import { ApiErrorAlert } from './components/common';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -31,6 +33,13 @@ const SettingsIcon: React.FC<{ active?: boolean }> = ({active}) => (
     </svg>
 );
 
+const ChatIcon: React.FC<{ active?: boolean }> = ({active}) => (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 2 : 1.5}
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+    </svg>
+);
+
 const LogoutIcon: React.FC = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -51,6 +60,12 @@ const NAV_ITEMS: DockItem[] = [
         label: '首页',
         to: '/',
         icon: HomeIcon,
+    },
+    {
+        key: 'chat',
+        label: '问股',
+        to: '/chat',
+        icon: ChatIcon,
     },
     {
         key: 'backtest',
@@ -130,7 +145,9 @@ const AppContent: React.FC = () => {
     if (loadError) {
         return (
             <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-base px-4">
-                <p className="text-sm text-red-400">无法连接到服务器，请检查后端是否正常运行。</p>
+                <div className="w-full max-w-lg">
+                    <ApiErrorAlert error={loadError}/>
+                </div>
                 <button
                     type="button"
                     className="btn-primary"
@@ -160,6 +177,7 @@ const AppContent: React.FC = () => {
             <main className="flex-1 dock-safe-area">
                 <Routes>
                     <Route path="/" element={<HomePage/>}/>
+                    <Route path="/chat" element={<ChatPage/>}/>
                     <Route path="/backtest" element={<BacktestPage/>}/>
                     <Route path="/settings" element={<SettingsPage/>}/>
                     <Route path="/login" element={<LoginPage/>}/>
